@@ -1,7 +1,11 @@
 import re
+from functools import lru_cache
+from inspect import signature
+
 import torch
 
 from qwen_vl_utils import process_vision_info
+from qwen_vl_utils.vision_process import fetch_image, fetch_video
 
 from src.constants import (
     DEFAULT_IMAGE_TOKEN,
@@ -68,6 +72,22 @@ def pad_sequence(sequences, padding_side='right', padding_value=0):
             output.data[i, -length:] = seq
     return output
 
+@lru_cache(maxsize=1)
+def _process_vision_info_parameters():
+    return set(signature(process_vision_info).parameters)
+
+def _process_vision_info_compat(messages, **requested_kwargs):
+    supported_parameters = _process_vision_info_parameters()
+    kwargs = {
+        key: value
+        for key, value in requested_kwargs.items()
+        if key in supported_parameters
+    }
+    return process_vision_info(messages, **kwargs)
+
+def _vision_size_factor(image_patch_size):
+    return image_patch_size * 2 if image_patch_size else 28
+
 def get_image_info(image_path, min_pixel, max_pixel, width, height, image_patch_size):
     # Using this because of process_vision_info function
     # Need to fix this in the future
@@ -89,7 +109,14 @@ def get_image_info(image_path, min_pixel, max_pixel, width, height, image_patch_
         }
     ]
 
-    image_input, _ = process_vision_info(messages, image_patch_size=image_patch_size)
+    if "image_patch_size" in _process_vision_info_parameters():
+        vision_outputs = _process_vision_info_compat(
+            messages,
+            image_patch_size=image_patch_size,
+        )
+        image_input = vision_outputs[0]
+    else:
+        image_input = [fetch_image(content, size_factor=_vision_size_factor(image_patch_size))]
 
     return image_input[0]
 
@@ -115,12 +142,23 @@ def get_video_info(video_path, min_pixels, max_pixels, width, height, fps, image
         }
     ]
 
-    _, video_input, video_kwargs = process_vision_info(
-        messages, 
-        return_video_kwargs=True, 
-        image_patch_size=image_patch_size, 
-        return_video_metadata=return_video_metadata
-    )
+    if "image_patch_size" in _process_vision_info_parameters():
+        vision_outputs = _process_vision_info_compat(
+            messages, 
+            return_video_kwargs=True, 
+            image_patch_size=image_patch_size, 
+            return_video_metadata=return_video_metadata
+        )
+        video_input = vision_outputs[1]
+        video_kwargs = vision_outputs[2] if len(vision_outputs) > 2 else {}
+    else:
+        video, fps = fetch_video(
+            content,
+            image_factor=_vision_size_factor(image_patch_size),
+            return_video_sample_fps=True,
+        )
+        video_input = [video]
+        video_kwargs = {"fps": [fps]}
 
     return video_input[0], video_kwargs
 

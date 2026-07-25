@@ -150,6 +150,8 @@ class TrainingArguments(HFTrainingArguments):
     lora_namespan_exclude: str = field(default=None, metadata={"help": "List of namespan to exclude for LoRA"})
     num_lora_modules: int = -1
     use_liger: bool = True
+    sft_rollout_every_steps: int = 0
+    sft_rollout_max_new_tokens: int = 64
 
 @dataclass
 class DPOArguments(DPOConfigTRL):

@@ -1,33 +1,109 @@
-# Local archive; keep out of public uploads.
-rubbish/
+# DermoGPT repository hygiene for cross-server GitHub sync.
+# Track source code, scripts, prompts, agent rules, and environment specs.
+# Do not track datasets, model weights, checkpoints, logs, caches, or run outputs.
 
-# Large or separately released benchmark data files.
+###############################################################################
+# Local archives and temporary workspaces
+###############################################################################
+rubbish/
+tmp/
+paper_review/
+
+###############################################################################
+# Python and test artifacts
+###############################################################################
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.coverage
+.coverage.*
+htmlcov/
+
+###############################################################################
+# Build and package artifacts
+###############################################################################
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+*.whl
+
+###############################################################################
+# Local environments and secrets
+###############################################################################
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+env/
+ENV/
+condaenv.*.requirements.txt
+
+###############################################################################
+# Editor, OS, and local agent runtime state
+###############################################################################
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.claude/
+.omx/
+
+###############################################################################
+# Data files and derived dataset snapshots
+###############################################################################
+data/*
+!data/
+!data/.gitkeep
+!data/*.md
+
+# Keep benchmark scripts trackable, but exclude large benchmark payloads.
 dataset_final/benchmark/**/*.json
 dataset_final/benchmark/**/*.jsonl
 
-# Python/runtime artifacts.
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.mypy_cache/
+###############################################################################
+# Experiment outputs and trackers
+###############################################################################
+experiment/*
+!experiment/
+!experiment/.gitkeep
+!experiment/*.md
 
-# Training and inference outputs.
 output/
 outputs/
 runs/
 logs/
 wandb/
+swanlog/
+**/swanlog/
 *.log
 
-# Local environment files.
-.env
-.venv/
-venv/
-
-# Model checkpoints and binary artifacts.
+###############################################################################
+# Model weights, checkpoints, adapters, and binary artifacts
+###############################################################################
+checkpoint-*/
+**/checkpoint-*/
 *.safetensors
 *.bin
 *.pt
 *.pth
 *.ckpt
-*.whl
+*.onnx
+*.gguf
+*.npz
+*.npy
+
+###############################################################################
+# Local model/package caches
+###############################################################################
+.cache/
+cache/
+modelscope_cache/
+huggingface/
+hf_cache/
+trl_wheels/

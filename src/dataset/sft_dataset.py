@@ -134,6 +134,7 @@ class SupervisedDataset(Dataset):
         all_labels = []
         all_pixel_values = []
         all_image_grid_thw = []
+        all_mm_token_type_ids = []
         all_second_gird = []
 
         image_curr_count = 0
@@ -148,6 +149,7 @@ class SupervisedDataset(Dataset):
 
             all_input_ids.append(system_message_input_ids.squeeze(0))
             all_labels.append(system_labels.squeeze(0))
+            all_mm_token_type_ids.append(torch.zeros_like(system_message_input_ids.squeeze(0)))
 
         for _, j in enumerate(range(0, len(sources), 2)):
             user_input = sources[j]
@@ -162,6 +164,7 @@ class SupervisedDataset(Dataset):
                 images_for_this_turn = images[image_curr_count : image_curr_count + num_images]
                 inputs = processor(text=[user_input], images=images_for_this_turn, videos=videos, padding=False, do_resize=False, return_tensors='pt')
                 prompt_input_ids = inputs['input_ids']
+                prompt_mm_token_type_ids = inputs.get("mm_token_type_ids")
                 all_pixel_values.append(inputs[pixel_key])
                 all_image_grid_thw.append(inputs[grid_key])
                 image_curr_count += num_images
@@ -207,16 +210,27 @@ class SupervisedDataset(Dataset):
                         return_tensors='pt'
                     )
                 prompt_input_ids = inputs['input_ids']
+                prompt_mm_token_type_ids = inputs.get("mm_token_type_ids")
                 all_pixel_values.append(inputs[pixel_key])
                 all_image_grid_thw.append(inputs[grid_key])
                 video_curr_count += num_videos
 
             else:
                 prompt_input_ids = processor.tokenizer(user_input, add_special_tokens=False, padding=False, return_tensors='pt')['input_ids']
+                prompt_mm_token_type_ids = None
 
             response_input_ids = processor.tokenizer(gpt_response, add_special_tokens=False, padding=False, return_tensors='pt')['input_ids']
 
             input_ids = torch.cat([prompt_input_ids, response_input_ids], dim=1).squeeze(0)
+            if prompt_mm_token_type_ids is None:
+                prompt_mm_token_type_ids = torch.zeros_like(prompt_input_ids)
+            mm_token_type_ids = torch.cat(
+                [
+                    prompt_mm_token_type_ids,
+                    torch.zeros_like(response_input_ids),
+                ],
+                dim=1,
+            ).squeeze(0)
             labels = torch.cat(
                 [
                     torch.tensor([IGNORE_INDEX] * len(prompt_input_ids[0])),
@@ -227,11 +241,13 @@ class SupervisedDataset(Dataset):
 
             all_input_ids.append(input_ids)
             all_labels.append(labels)
+            all_mm_token_type_ids.append(mm_token_type_ids)
 
         # There is no need for eos or bos tokens in the input_ids
         # Qwen2-VL does not use them
         input_ids = torch.cat(all_input_ids, dim=0).to(torch.long)
         labels = torch.cat(all_labels, dim=0).to(torch.long)
+        mm_token_type_ids = torch.cat(all_mm_token_type_ids, dim=0).to(torch.long)
 
         # eos_token_id = processor.tokenizer.convert_tokens_to_ids(DEFAULT_IM_END_TOKEN)
         # input_ids, labels = truncate_sequence(input_ids, labels, self.max_length, eos_token_id)
@@ -242,6 +258,7 @@ class SupervisedDataset(Dataset):
             input_ids=input_ids,
             attention_mask=attention_mask,
             labels=labels,
+            mm_token_type_ids=mm_token_type_ids,
         )
 
         if pixel_key and grid_key:
@@ -269,6 +286,7 @@ class DataCollatorForSupervisedDataset(object):
         batch_pixel_video_values = []
         batch_video_thw = []
         batch_image_thw = []
+        batch_mm_token_type_ids = []
         batch_second_per_grid_ts = []
 
         for example in examples:
@@ -282,6 +300,8 @@ class DataCollatorForSupervisedDataset(object):
 
             batch_input_ids.append(example["input_ids"])
             batch_label_ids.append(example["labels"])
+            if "mm_token_type_ids" in keys:
+                batch_mm_token_type_ids.append(example["mm_token_type_ids"])
 
             if "second_per_grid_ts" in keys:
                 batch_second_per_grid_ts.extend(example["second_per_grid_ts"])
@@ -298,6 +318,13 @@ class DataCollatorForSupervisedDataset(object):
             'labels': labels,
             'attention_mask': attention_mask,
         }
+
+        if len(batch_mm_token_type_ids) > 0:
+            data_dict["mm_token_type_ids"] = pad_sequence(
+                batch_mm_token_type_ids,
+                padding_side='right',
+                padding_value=0,
+            )
 
         if len(batch_pixel_values) > 0:
             pixel_values = torch.cat(batch_pixel_values, dim=0)

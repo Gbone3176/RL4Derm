@@ -1,0 +1,127 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1784947891631,
+  "projectRoot": "/mnt/nas1/disk06/bowenguo/codes/DermoGPT",
+  "techStack": {
+    "languages": [
+      {
+        "name": "Python",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "requirements.txt"
+        ]
+      }
+    ],
+    "frameworks": [],
+    "packageManager": "pip",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "scripts",
+      "src"
+    ],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "data": {
+      "path": "data",
+      "purpose": "Data files",
+      "fileCount": 6,
+      "lastAccessed": 1784947891606,
+      "keyFiles": [
+        "MANIFEST.md",
+        "README.md",
+        "dermoinstruct_closed_vqa_test_2k.json",
+        "dermoinstruct_mcqa_train_10k.json",
+        "qwen35_mcqa_format_sft_train_10k.json"
+      ]
+    },
+    "dataset_final": {
+      "path": "dataset_final",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1784947891609,
+      "keyFiles": []
+    },
+    "experiment": {
+      "path": "experiment",
+      "purpose": null,
+      "fileCount": 3,
+      "lastAccessed": 1784947891611,
+      "keyFiles": [
+        "EXPERIMENTS.md",
+        "EXPERIMENT_DIR_RENAME_MAP.md",
+        "IDEAS.md"
+      ]
+    },
+    "paper_review": {
+      "path": "paper_review",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1784947891614,
+      "keyFiles": []
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 14,
+      "lastAccessed": 1784947891616,
+      "keyFiles": [
+        "build_qwen35_format_sft_data.py",
+        "build_qwen35_option_sft_data.py",
+        "finetune.sh",
+        "finetune_lora.sh",
+        "finetune_lora_vision.sh"
+      ]
+    },
+    "src": {
+      "path": "src",
+      "purpose": "Source code",
+      "fileCount": 5,
+      "lastAccessed": 1784947891618,
+      "keyFiles": [
+        "__init__.py",
+        "constants.py",
+        "merge_lora_weights.py",
+        "params.py",
+        "utils.py"
+      ]
+    },
+    "tmp": {
+      "path": "tmp",
+      "purpose": null,
+      "fileCount": 320,
+      "lastAccessed": 1784947891621,
+      "keyFiles": [
+        "condu01_grpo_medvlmr1_mcqa10k_handoff.md",
+        "cuda_toolkit_conda_after_list.txt",
+        "cuda_toolkit_conda_before_list.txt",
+        "cuda_toolkit_conda_cuda_nvcc_12_8_cf_dry_run.log",
+        "cuda_toolkit_conda_cuda_nvcc_12_8_dry_run.log"
+      ]
+    }
+  },
+  "hotPaths": [],
+  "userDirectives": []
+}

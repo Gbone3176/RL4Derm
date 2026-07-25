@@ -1,6 +1,7 @@
 # src/dataset/grpo_dataset.py
 import copy
 import os
+import re
 from types import SimpleNamespace
 from typing import Dict, List, Any, Union
 
@@ -21,10 +22,75 @@ from src.constants import (
 
 from .data_utils import get_image_info, get_video_info, llava_to_openai
 
+MEDVLMR1_RL_PROMPT_SUFFIX = (
+    "Your task:\n"
+    "1. Think through the question step by step, enclose your reasoning process in <think>...</think> tags.\n"
+    "2. Then provide the correct single-letter choice (A, B, C, D,...) inside <answer>...</answer> tags.\n"
+    "3. No extra information or text outside of these tags."
+)
+
+
+def _conversation_value(sample: dict, role: str) -> str:
+    for turn in sample.get("conversations", []):
+        if turn.get("from") == role:
+            return turn.get("value", "")
+    return ""
+
+
+def _has_mcqa_options(text: str) -> bool:
+    return all(re.search(rf"(^|\s){letter}\)", text) for letter in ("A", "B", "C", "D"))
+
+
+def _is_task2_mcqa(sample: dict) -> bool:
+    sample_id = str(sample.get("id", ""))
+    if sample_id.startswith("task2_diagnosis_mcq_"):
+        return True
+    return _has_mcqa_options(_conversation_value(sample, "human"))
+
+
+def _assistant_answer(sample: dict) -> str:
+    return _conversation_value(sample, "gpt").strip()
+
+
+def _answer_parts(answer: str) -> dict:
+    match = re.match(r"\s*([A-Da-d])\s*[\).:-]?\s*(.*?)\s*$", answer or "")
+    if not match:
+        return {"answer": answer.strip() if answer else ""}
+    choice_text = match.group(2).strip()
+    return {
+        "answer": answer.strip(),
+        "answer_letter": match.group(1).upper(),
+        "answer_text": choice_text,
+    }
+
+
+def _user_prompt_text(user_msg: dict) -> str:
+    content = user_msg.get("content", "")
+    return re.sub(r"\s*<\|vision_start\|><\|image_pad\|><\|vision_end\|>\s*", " ", content).strip()
+
+
+def _build_mcqa_user_prompt(user_msg: dict) -> str:
+    question = _user_prompt_text(user_msg)
+    return f"{question}\n\n{MEDVLMR1_RL_PROMPT_SUFFIX}"
+
+
+def _derive_ground_truth(sample: dict) -> dict:
+    ground_truth = copy.deepcopy(sample.get("ground_truth") or {})
+    if ground_truth.get("task"):
+        return ground_truth
+    if _is_task2_mcqa(sample):
+        answer = _assistant_answer(sample)
+        ground_truth.update(
+            task="task2_mcqa",
+            modality="diagnosis_mcqa",
+            **_answer_parts(answer),
+        )
+    return ground_truth
+
 
 def _choose_system_message(sample: dict) -> str:
     task = (
-        sample.get("ground_truth", {})
+        _derive_ground_truth(sample)
         .get("task", "")
         .strip()
         .lower()
@@ -187,24 +253,30 @@ class GRPODataset(Dataset):
             raise ValueError(f"[GRPO] sample {sources.get('id')} missing user message.")
 
 
-        sys_text = _choose_system_message(sources)
+        ground_truth = _derive_ground_truth(sources)
+        assistant = _assistant_answer(sources)
 
 
-        # <|im_start|>system ... <|im_end|>\n
-        # <|im_start|>user   ... <|im_end|>\n
-
-        system_block = f"{DEFAULT_IM_START_TOKEN}system\n{sys_text}{DEFAULT_IM_END_TOKEN}\n"
-        user_block   = f"{DEFAULT_IM_START_TOKEN}user\n{user_msg['content']}{DEFAULT_IM_END_TOKEN}\n"
-        assistant_head = f"{DEFAULT_IM_START_TOKEN}assistant\n"
-
-        prompt = system_block + user_block + assistant_head
+        if ground_truth.get("task") == "task2_mcqa":
+            user_text = _build_mcqa_user_prompt(user_msg)
+            prompt = [
+                {"role": "user", "content": user_text},
+            ]
+        else:
+            sys_text = _choose_system_message(sources)
+            user_text = _user_prompt_text(user_msg)
+            prompt = [
+                {"role": "system", "content": sys_text},
+                {"role": "user", "content": user_text},
+            ]
 
         data_dict = dict(
             id=sources.get("id", f"sample-{i}"),
             prompt=prompt,
             images=images,     # or None
             videos=videos,     # or None
-            ground_truth=sources.get("ground_truth", {}),
+            assistant=assistant,
+            ground_truth=ground_truth,
         )
         return data_dict
 

@@ -16,6 +16,12 @@ import importlib
 import inspect
 from types import ModuleType
 from typing import Callable, List
+from train.qwen35_dense_utils import (
+    Qwen35DependencyError,
+    is_qwen35_dense_identifier,
+    load_qwen35_dense_model,
+    load_qwen35_processor,
+)
 
 def disable_torch_init():
     """
@@ -53,34 +59,61 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
         lora_cfg_pretrained = AutoConfig.from_pretrained(model_path)
         if hasattr(lora_cfg_pretrained, 'quantization_config'):
             del lora_cfg_pretrained.quantization_config
-        processor = AutoProcessor.from_pretrained(model_base)
-        print('Loading Qwen2-VL from base model...')
-        if "Qwen3" in model_base:
+        if is_qwen35_dense_identifier(model_base):
+            processor, model, loader_diagnostics = _load_qwen35_dense_lora_model(
+                model_path=model_path,
+                model_base=model_base,
+                base_kwargs=kwargs,
+            )
+        elif "Qwen3" in model_base:
+            processor = AutoProcessor.from_pretrained(model_base)
+            print('Loading Qwen3-VL from base model...')
             model = Qwen3VLForConditionalGeneration.from_pretrained(model_base, low_cpu_mem_usage=True, config=lora_cfg_pretrained, **kwargs)
+            loader_diagnostics = _loader_diagnostics(model_path, model_base, processor, model, "Qwen3-VL LoRA")
         elif "Qwen2.5" in model_base:
+            processor = AutoProcessor.from_pretrained(model_base)
+            print('Loading Qwen2.5-VL from base model...')
             model = Qwen2_5_VLForConditionalGeneration.from_pretrained(model_base, low_cpu_mem_usage=True, config=lora_cfg_pretrained, **kwargs)
+            loader_diagnostics = _loader_diagnostics(model_path, model_base, processor, model, "Qwen2.5-VL LoRA")
         else:
+            processor = AutoProcessor.from_pretrained(model_base)
+            print('Loading Qwen2-VL from base model...')
             model = Qwen2VLForConditionalGeneration.from_pretrained(model_base, low_cpu_mem_usage=True, config=lora_cfg_pretrained, **kwargs)
+            loader_diagnostics = _loader_diagnostics(model_path, model_base, processor, model, "Qwen2-VL LoRA")
             
         token_num, tokem_dim = model.lm_head.out_features, model.lm_head.in_features
         if model.lm_head.weight.shape[0] != token_num:
             model.lm_head.weight = torch.nn.Parameter(torch.empty(token_num, tokem_dim, device=model.device, dtype=model.dtype))
             model.model.embed_tokens.weight = torch.nn.Parameter(torch.empty(token_num, tokem_dim, device=model.device, dtype=model.dtype))
 
-        print('Loading additional Qwen2-VL weights...')
-        non_lora_trainables = torch.load(os.path.join(model_path, 'non_lora_state_dict.bin'), map_location='cpu')
-        non_lora_trainables = {(k[11:] if k.startswith('base_model.') else k): v for k, v in non_lora_trainables.items()}
-        if any(k.startswith('model.model.') for k in non_lora_trainables):
-            non_lora_trainables = {(k[6:] if k.startswith('model.') else k): v for k, v in non_lora_trainables.items()}
-        model.load_state_dict(non_lora_trainables, strict=False)
+        if not is_qwen35_dense_identifier(model_base):
+            print('Loading additional Qwen-VL weights...')
+            non_lora_trainables = torch.load(os.path.join(model_path, 'non_lora_state_dict.bin'), map_location='cpu')
+            non_lora_trainables = _normalize_non_lora_state_dict(non_lora_trainables, strip_peft_base_layer=False)
+            model.load_state_dict(non_lora_trainables, strict=False)
     
         print('Loading LoRA weights...')
         model = PeftModel.from_pretrained(model, model_path)
 
         print('Merging LoRA weights...')
         model = model.merge_and_unload()
+        loader_diagnostics = _loader_diagnostics(
+            model_path,
+            model_base,
+            processor,
+            model,
+            loader_diagnostics.get("loader", "Qwen-VL LoRA"),
+            extra={**loader_diagnostics, "merge_lora": True},
+        )
+        _attach_loader_diagnostics(processor, model, loader_diagnostics)
 
-        print('Model Loaded!!!')
+        print(
+            "Model Loaded!!! "
+            f"loader={loader_diagnostics['loader']} "
+            f"model_class={loader_diagnostics['model_class']} "
+            f"dtype={loader_diagnostics['dtype']} "
+            f"processor_class={loader_diagnostics['processor_class']}"
+        )
 
     else:
         print(f"Loading model from {model_path} as a standard model. Adapter files were not found, so it can't be merged")
@@ -88,17 +121,152 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
         with open(config_path, 'r') as f:
             config = json.load(f)
 
-        processor = AutoProcessor.from_pretrained(model_path)
-        
         architecture = config.get("architectures", [None])[0]
-        if "Qwen3" in architecture:
+        model_type = config.get("model_type")
+        if model_type == "qwen3_5" or architecture == "Qwen3_5ForConditionalGeneration" or is_qwen35_dense_identifier(model_path):
+            try:
+                processor = load_qwen35_processor(model_path)
+                qwen35_kwargs = dict(kwargs)
+                if "load_in_8bit" not in qwen35_kwargs and "quantization_config" not in qwen35_kwargs:
+                    qwen35_kwargs["torch_dtype"] = torch.bfloat16
+                print("Loading Qwen3.5 dense standard model...")
+                model = load_qwen35_dense_model(model_path, low_cpu_mem_usage=True, **qwen35_kwargs)
+            except Qwen35DependencyError as exc:
+                raise RuntimeError(
+                    "Qwen3.5 dense checkpoint is unsupported by the current dependency set; "
+                    "refusing to load it as Qwen3VLForConditionalGeneration. "
+                    f"{exc}"
+                ) from exc
+        elif "Qwen3" in architecture:
+            processor = AutoProcessor.from_pretrained(model_path)
             model = Qwen3VLForConditionalGeneration.from_pretrained(model_path, low_cpu_mem_usage=True, **kwargs)
         elif "Qwen2_5" in architecture:
+            processor = AutoProcessor.from_pretrained(model_path)
             model = Qwen2_5_VLForConditionalGeneration.from_pretrained(model_path, low_cpu_mem_usage=True, **kwargs)
         else:
+            processor = AutoProcessor.from_pretrained(model_path)
             model = Qwen2VLForConditionalGeneration.from_pretrained(model_path, low_cpu_mem_usage=True, **kwargs)
 
     return processor, model
+
+
+def _load_qwen35_dense_lora_model(model_path, model_base, base_kwargs):
+    print("Loading Qwen3.5 dense LoRA from base model...")
+    load_kwargs = dict(base_kwargs)
+    if "load_in_8bit" not in load_kwargs and "quantization_config" not in load_kwargs:
+        load_kwargs["torch_dtype"] = torch.bfloat16
+
+    try:
+        base_config = AutoConfig.from_pretrained(model_base)
+        if hasattr(base_config, "quantization_config"):
+            del base_config.quantization_config
+        processor = load_qwen35_processor(model_base)
+        model = load_qwen35_dense_model(model_base, low_cpu_mem_usage=True, config=base_config, **load_kwargs)
+    except Qwen35DependencyError as exc:
+        raise RuntimeError(
+            "Qwen3.5 dense LoRA base is unsupported by the current dependency set; "
+            "refusing to load it as Qwen3VLForConditionalGeneration. "
+            f"{exc}"
+        ) from exc
+
+    diagnostics = _loader_diagnostics(model_path, model_base, processor, model, "Qwen3.5 dense LoRA")
+    diagnostics["requested_torch_dtype"] = str(load_kwargs.get("torch_dtype"))
+    diagnostics["non_lora"] = _load_qwen35_non_lora_state_dict(model, model_path)
+    diagnostics["loaded_non_lora"] = diagnostics["non_lora"]["loaded"]
+    diagnostics["merge_lora"] = False
+    return processor, model, diagnostics
+
+
+def _normalize_non_lora_state_dict(state_dict, *, strip_peft_base_layer):
+    normalized = {(k[11:] if k.startswith('base_model.') else k): v for k, v in state_dict.items()}
+    if any(k.startswith('model.model.') for k in normalized):
+        normalized = {(k[6:] if k.startswith('model.') else k): v for k, v in normalized.items()}
+    if strip_peft_base_layer:
+        normalized = {k.replace(".base_layer.", "."): v for k, v in normalized.items()}
+    return normalized
+
+
+def _load_qwen35_non_lora_state_dict(model, model_path):
+    path = os.path.join(model_path, "non_lora_state_dict.bin")
+    info = {
+        "path": path,
+        "exists": os.path.exists(path),
+        "loaded": False,
+        "raw_key_count": 0,
+        "normalized_key_count": 0,
+        "missing_count": None,
+        "unexpected_count": None,
+        "missing_sample": [],
+        "unexpected_sample": [],
+    }
+    if not os.path.exists(path):
+        print("Qwen3.5 dense LoRA non_lora_state_dict.bin not found; loading adapter only.")
+        return info
+
+    print(f"Loading Qwen3.5 dense non-LoRA weights from {path}...")
+    non_lora_trainables = torch.load(path, map_location="cpu")
+    info["raw_key_count"] = len(non_lora_trainables)
+    info["raw_key_sample"] = list(non_lora_trainables)[:10]
+    non_lora_trainables = _normalize_non_lora_state_dict(non_lora_trainables, strip_peft_base_layer=True)
+    info["normalized_key_count"] = len(non_lora_trainables)
+    info["normalized_key_sample"] = list(non_lora_trainables)[:10]
+    incompatible = model.load_state_dict(non_lora_trainables, strict=False)
+    missing = list(incompatible.missing_keys)
+    unexpected = list(incompatible.unexpected_keys)
+    info.update(
+        {
+            "loaded": True,
+            "missing_count": len(missing),
+            "unexpected_count": len(unexpected),
+            "missing_sample": missing[:20],
+            "unexpected_sample": unexpected[:20],
+        }
+    )
+    print(
+        "Qwen3.5 dense non-LoRA load summary: "
+        f"raw_keys={info['raw_key_count']} normalized_keys={info['normalized_key_count']} "
+        f"missing={info['missing_count']} unexpected={info['unexpected_count']} "
+        f"missing_sample={info['missing_sample']} unexpected_sample={info['unexpected_sample']}"
+    )
+    allowed_missing = {"lm_head.weight"}
+    disallowed_missing = [key for key in missing if key not in allowed_missing]
+    if unexpected or disallowed_missing:
+        raise RuntimeError(
+            "Qwen3.5 dense non-LoRA weights did not match the dense base model after key normalization; "
+            f"missing_count={len(missing)} unexpected_count={len(unexpected)} "
+            f"disallowed_missing_sample={disallowed_missing[:20]} unexpected_sample={unexpected[:20]}"
+        )
+    return info
+
+
+def _loader_diagnostics(model_path, model_base, processor, model, loader, extra=None):
+    config = getattr(model, "config", None)
+    tokenizer = getattr(processor, "tokenizer", None)
+    try:
+        dtype = str(next(model.parameters()).dtype)
+    except StopIteration:
+        dtype = None
+    diagnostics = {
+        "loader": loader,
+        "model_path": str(model_path),
+        "model_base": str(model_base),
+        "model_class": type(model).__name__,
+        "config_class": type(config).__name__ if config is not None else None,
+        "config_model_type": getattr(config, "model_type", None),
+        "config_architectures": getattr(config, "architectures", None),
+        "processor_class": type(processor).__name__,
+        "dtype": dtype,
+        "eos_token_id": getattr(tokenizer, "eos_token_id", None),
+        "pad_token_id": getattr(tokenizer, "pad_token_id", None),
+    }
+    if extra:
+        diagnostics.update(extra)
+    return diagnostics
+
+
+def _attach_loader_diagnostics(processor, model, diagnostics):
+    setattr(processor, "_dermogpt_loader_diagnostics", diagnostics)
+    setattr(model, "_dermogpt_loader_diagnostics", diagnostics)
 
 def is_lora_model(model_path: str | Path) -> bool:
     """
