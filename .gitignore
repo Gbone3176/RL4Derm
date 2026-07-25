@@ -61,6 +61,8 @@ data/*
 !data/
 !data/.gitkeep
 !data/*.md
+!data/**/
+!data/**/*.json
 
 # Keep benchmark scripts trackable, but exclude large benchmark payloads.
 dataset_final/benchmark/**/*.json
