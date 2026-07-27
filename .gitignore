@@ -110,3 +110,4 @@ modelscope_cache/
 huggingface/
 hf_cache/
 trl_wheels/
+AGENTS.md
