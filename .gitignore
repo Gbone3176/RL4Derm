@@ -70,6 +70,14 @@ dataset_final/benchmark/**/*.json
 dataset_final/benchmark/**/*.jsonl
 
 ###############################################################################
+# Agent rules, harness config, and environment spec (local-only)
+###############################################################################
+AGENTS.md
+dermogpt-harness.yaml
+environment.yaml
+HARNESS.md
+
+###############################################################################
 # Experiment outputs and trackers
 ###############################################################################
 experiment/*
