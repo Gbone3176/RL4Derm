@@ -1,0 +1,58 @@
+{
+  "status": "PASS",
+  "path_format": "relative",
+  "filter_rule": {
+    "source_fields": [
+      "options",
+      "gold_label",
+      "answer"
+    ],
+    "require_options_count": 4,
+    "require_labels_exact_order": [
+      "A",
+      "B",
+      "C",
+      "D"
+    ],
+    "require_answer_in": [
+      "A",
+      "B",
+      "C",
+      "D"
+    ],
+    "note": "Filtering is based on recovered normalized options, not raw manifest options."
+  },
+  "splits": {
+    "train": {
+      "source": "data/dermmask_qwen35_train_image_disjoint.json",
+      "output": "data/dermmask_qwen35_4choice_train_image_disjoint.json",
+      "source_count": 27382,
+      "output_count": 13691,
+      "filtered_count": 13691,
+      "source_sha256": "f7df3249282e7b619319a249ace8b607d75da7985695e9855446bd220df6e231",
+      "output_sha256": "0b2f7eacf8f246d8dffb90c8f97bd68d0d824cca4237906f21b260bda73e91f0",
+      "first_id": "mcqa:000003",
+      "last_id": "mcqa:029368"
+    },
+    "test": {
+      "source": "data/dermmask_qwen35_test_image_disjoint.json",
+      "output": "data/dermmask_qwen35_4choice_test_image_disjoint.json",
+      "source_count": 2000,
+      "output_count": 1000,
+      "filtered_count": 1000,
+      "source_sha256": "e0884272b5ab36077517124015395d0df2023b61fba56fdddff5028eaedaf902",
+      "output_sha256": "6e14ef2dbff6028757488c8ccb55dbf43cf4b49e595341badc91d4e048001440",
+      "first_id": "mcqa:000001",
+      "last_id": "mcqa:029310"
+    }
+  },
+  "source": {
+    "train": "data/dermmask_qwen35_train_image_disjoint.json",
+    "test": "data/dermmask_qwen35_test_image_disjoint.json"
+  },
+  "outputs": {
+    "train": "data/dermmask_qwen35_4choice_train_image_disjoint.json",
+    "test": "data/dermmask_qwen35_4choice_test_image_disjoint.json"
+  },
+  "script": "scripts/extract_dermmask_4choice.py"
+}

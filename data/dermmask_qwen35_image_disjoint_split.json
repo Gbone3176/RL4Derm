@@ -1,0 +1,35 @@
+{
+  "counts": {
+    "image_overlap": 0,
+    "target_test_images": 1000,
+    "target_test_rows": 2000,
+    "test_rows": 2000,
+    "test_unique_images": 1000,
+    "train_rows": 27382,
+    "train_unique_images": 13691
+  },
+  "created_at": "2026-07-27T12:06:25+00:00",
+  "group_key": "provenance.image_id",
+  "outputs": {
+    "metadata": "/mnt/nas1/disk06/bowenguo/codes/DermoGPT/data/dermmask_qwen35_image_disjoint_split.json",
+    "test": "/mnt/nas1/disk06/bowenguo/codes/DermoGPT/data/dermmask_qwen35_test_image_disjoint.json",
+    "train": "/mnt/nas1/disk06/bowenguo/codes/DermoGPT/data/dermmask_qwen35_train_image_disjoint.json"
+  },
+  "seed": 20260727,
+  "selection_method": "shuffled_whole_groups_exact",
+  "source": {
+    "input_rows": 29382,
+    "input_unique_images": 14691,
+    "test_input": "/mnt/nas1/disk06/bowenguo/codes/DermoGPT/data/dermmask_qwen35_test_normalized.json",
+    "test_sha256": "d4b32a0fee964a6a10bee5955a4902495bb1e2d7aa8356e12abfdb2b663fc96b",
+    "train_input": "/mnt/nas1/disk06/bowenguo/codes/DermoGPT/data/dermmask_qwen35_train_normalized.json",
+    "train_sha256": "9c738112c99f4d08dca9d9f9951864b994f093dc0fc03f2defd1ca5a55da930c"
+  },
+  "split_policy": "whole image_id groups assigned to one split",
+  "status": "PASS",
+  "validation": {
+    "image_disjoint": true,
+    "row_count_preserved": true,
+    "unique_row_ids": true
+  }
+}

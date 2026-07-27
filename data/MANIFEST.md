@@ -272,6 +272,43 @@ Rules:
   `split + image_id + answer`.
 - Reject ambiguity, duplicate labels, missing images, and unmapped answers.
 
+## DermMaskTriads Qwen3.5 Image-Disjoint Split
+
+- Created: 2026-07-27
+- Extraction script: `scripts/split_dermmask_by_image_id.py`
+- Input train: `data/dermmask_qwen35_train_normalized.json`
+- Input test: `data/dermmask_qwen35_test_normalized.json`
+- Output train: `data/dermmask_qwen35_train_image_disjoint.json`
+- Output test: `data/dermmask_qwen35_test_image_disjoint.json`
+- Split metadata: `data/dermmask_qwen35_image_disjoint_split.json`
+- Group key: `provenance.image_id`
+- Seed: `20260727`
+- Policy: recombine the existing normalized train/test rows, shuffle whole
+  image groups with a fixed seed, assign 1,000 complete image groups to test,
+  and assign all remaining groups to train. Every source image has exactly two
+  rows, so the test target is exactly 2,000 rows.
+- The original sample-level split files are preserved and are not overwritten.
+
+| Split | Rows | Unique images | Missing images | Duplicate ids | Invalid rows |
+|---|---:|---:|---:|---:|---:|
+| train | 27,382 | 13,691 | 0 | 0 | 0 |
+| test | 2,000 | 1,000 | 0 | 0 | 0 |
+
+The new train/test image intersection is 0. The split preserves all 29,382
+source rows, all 29,382 unique row IDs, and all 14,691 unique image IDs.
+
+### Image-Disjoint Strict Four-Choice Derivation
+
+- Extraction script: `scripts/extract_dermmask_4choice.py`
+- Source train: `data/dermmask_qwen35_train_image_disjoint.json`
+- Source test: `data/dermmask_qwen35_test_image_disjoint.json`
+- Output train: `data/dermmask_qwen35_4choice_train_image_disjoint.json`
+- Output test: `data/dermmask_qwen35_4choice_test_image_disjoint.json`
+- Readiness marker: `data/dermmask_qwen35_4choice_image_disjoint_ready.json`
+- Counts: train 13,691 rows / 13,691 images; test 1,000 rows / 1,000 images.
+- The four-choice outputs inherit the image-disjoint assignment above; their
+  train/test image intersection is also 0.
+
 ## DermMaskTriads Qwen3.5 Strict Four-Choice Subsets
 
 - Created: 2026-07-27

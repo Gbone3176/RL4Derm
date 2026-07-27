@@ -1,0 +1,4 @@
+data/dermmask_qwen35_train_image_disjoint.json filter=lfs diff=lfs merge=lfs -text
+data/dermmask_qwen35_test_image_disjoint.json filter=lfs diff=lfs merge=lfs -text
+data/dermmask_qwen35_4choice_train_image_disjoint.json filter=lfs diff=lfs merge=lfs -text
+data/dermmask_qwen35_4choice_test_image_disjoint.json filter=lfs diff=lfs merge=lfs -text
