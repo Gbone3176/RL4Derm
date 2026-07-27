@@ -21,6 +21,11 @@ from src.constants import (
 )
 
 from .data_utils import get_image_info, get_video_info, llava_to_openai
+from .dermmask_normalizer import is_dermmask_manifest, normalize_dermmask_payload
+try:
+    from paths import resolve_dataset_path
+except ImportError:  # pragma: no cover
+    from src.paths import resolve_dataset_path
 
 MEDVLMR1_RL_PROMPT_SUFFIX = (
     "Your task:\n"
@@ -38,7 +43,7 @@ def _conversation_value(sample: dict, role: str) -> str:
 
 
 def _has_mcqa_options(text: str) -> bool:
-    return all(re.search(rf"(^|\s){letter}\)", text) for letter in ("A", "B", "C", "D"))
+    return len(re.findall(r"(^|\s)[A-Z]\)", text)) >= 2
 
 
 def _is_task2_mcqa(sample: dict) -> bool:
@@ -53,7 +58,7 @@ def _assistant_answer(sample: dict) -> str:
 
 
 def _answer_parts(answer: str) -> dict:
-    match = re.match(r"\s*([A-Da-d])\s*[\).:-]?\s*(.*?)\s*$", answer or "")
+    match = re.match(r"\s*([A-Za-z])\s*[\).:-]?\s*(.*?)\s*$", answer or "")
     if not match:
         return {"answer": answer.strip() if answer else ""}
     choice_text = match.group(2).strip()
@@ -103,8 +108,11 @@ def _choose_system_message(sample: dict) -> str:
 
 
 def _safe_join(folder: str, path: str) -> str:
-    if os.path.isabs(path) or path.startswith("http"):
+    if os.path.isabs(path) or path.startswith(("http://", "https://", "zip://")):
         return path
+    configured = resolve_dataset_path(path)
+    if configured.exists():
+        return str(configured)
     return os.path.join(folder, path) if folder else path
 
 
@@ -133,6 +141,8 @@ class GRPODataset(Dataset):
                 list_data_dict = json.load(open(data_path, "r", encoding="utf-8"))
         else:
             list_data_dict = data_path
+        if is_dermmask_manifest(list_data_dict):
+            list_data_dict = normalize_dermmask_payload(list_data_dict)
 
         self.model_id = model_id
         self.processor = processor

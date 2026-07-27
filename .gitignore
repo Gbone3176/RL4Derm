@@ -53,7 +53,7 @@ Thumbs.db
 .vscode/
 .claude/
 .omx/
-/AGENTS.md
+.omc/
 
 ###############################################################################
 # Data files and derived dataset snapshots

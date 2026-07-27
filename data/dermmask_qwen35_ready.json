@@ -1,0 +1,104 @@
+{
+  "code_files": [
+    "src/dataset/dermmask_normalizer.py",
+    "src/dataset/sft_dataset.py",
+    "src/dataset/grpo_dataset_derm.py",
+    "src/train/reward_funcs.py",
+    "scripts/prepare_dermmask_qwen35.py"
+  ],
+  "counts": {
+    "test": 2000,
+    "train": 27382
+  },
+  "created_at": "2026-07-27T01:21:46",
+  "normalization_rule": [
+    "Use manifest options when answer maps to exactly one option.",
+    "For DermoInstruct rows with empty options, parse quoted choices preserved in question/text and map answer exactly.",
+    "For DermoBench Task 2.1-4/25 rows with truncated or mismatching options, recover original options from upstream DermoBench task2 files keyed by split+image_id+answer.",
+    "Reject ambiguity, duplicate labels, missing images, and unmapped answers."
+  ],
+  "normalized": {
+    "test": "data/dermmask_qwen35_test_normalized.json",
+    "train": "data/dermmask_qwen35_train_normalized.json"
+  },
+  "normalized_paths": {
+    "test": "data/dermmask_qwen35_test_normalized.json",
+    "train": "data/dermmask_qwen35_train_normalized.json"
+  },
+  "raw": {
+    "test": "data/derm_mcqa_mask_bbox_text_test.json",
+    "test_sha256": "fb32532633090984e7dedb42e371867fc882d4dec890831b68e7aa35679b63a1",
+    "train": "data/derm_mcqa_mask_bbox_text_train.json",
+    "train_sha256": "1ee14b47adc6089ff15ff912fa3f8efcdeffdd75c6c0591fa8ca9af87b478043",
+    "source_train_sha256": "49aec8f077c99bc765054488cbaf7e3d95558877d832d0b9f700984bfb6eb02a",
+    "source_test_sha256": "22ab66943dbff3a9712cb5709714ccc7e726ce218dac896f0871f32d9d933bf4",
+    "path_format": "relative"
+  },
+  "raw_paths": {
+    "test": "data/derm_mcqa_mask_bbox_text_test.json",
+    "train": "data/derm_mcqa_mask_bbox_text_train.json"
+  },
+  "raw_sha256": {
+    "train": "1ee14b47adc6089ff15ff912fa3f8efcdeffdd75c6c0591fa8ca9af87b478043",
+    "test": "fb32532633090984e7dedb42e371867fc882d4dec890831b68e7aa35679b63a1"
+  },
+  "status": "PASS",
+  "validation_evidence": {
+    "dataset_smoke_log": "tmp/dermmask_sft_launch/dataset_smoke.log",
+    "dataset_smoke_status": "PASS",
+    "gate": "tmp/dermmask_sft_launch/dermmask_qwen35_gate.json",
+    "test": {
+      "count": 2000,
+      "count_ok": true,
+      "duplicate_ids": 0,
+      "examples_invalid": [],
+      "examples_missing_images": [],
+      "expected_count": 2000,
+      "invalid_rows": 0,
+      "max_label": "T",
+      "missing_images": 0,
+      "rule_counts": {
+        "dermobench_original_explicit_label_prefix": 6,
+        "dermoinstruct_preserved_text_answer_text_exact_match": 1033,
+        "manifest_options_answer_text_exact_match": 17,
+        "manifest_options_explicit_label_prefix": 944
+      },
+      "source_counts": {
+        "DermoBench": 23,
+        "DermoInstruct": 1977
+      }
+    },
+    "train": {
+      "count": 27382,
+      "count_ok": true,
+      "duplicate_ids": 0,
+      "examples_invalid": [],
+      "examples_missing_images": [],
+      "expected_count": 27382,
+      "invalid_rows": 0,
+      "max_label": "Y",
+      "missing_images": 0,
+      "rule_counts": {
+        "dermobench_original_explicit_label_prefix": 85,
+        "dermoinstruct_preserved_text_answer_text_exact_match": 13539,
+        "dermoinstruct_preserved_text_explicit_label_prefix": 10,
+        "manifest_options_answer_text_exact_match": 106,
+        "manifest_options_explicit_label_prefix": 13642
+      },
+      "source_counts": {
+        "DermoBench": 195,
+        "DermoInstruct": 27187
+      }
+    }
+  },
+  "path_format": "relative",
+  "paths_config": "dermogpt-harness.yaml",
+  "source_sha256": {
+    "train": "49aec8f077c99bc765054488cbaf7e3d95558877d832d0b9f700984bfb6eb02a",
+    "test": "22ab66943dbff3a9712cb5709714ccc7e726ce218dac896f0871f32d9d933bf4"
+  },
+  "current_sha256": {
+    "train": "1ee14b47adc6089ff15ff912fa3f8efcdeffdd75c6c0591fa8ca9af87b478043",
+    "test": "fb32532633090984e7dedb42e371867fc882d4dec890831b68e7aa35679b63a1"
+  }
+}

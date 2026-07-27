@@ -44,12 +44,12 @@ def _normalize_text_answer(text):
     return text.strip()
 
 def _option_letter(text):
-    match = re.match(r"\s*([abcd])\s*[\).:-]?", _normalize_text_answer(text), re.IGNORECASE)
+    match = re.match(r"\s*([a-z])\s*[\).:-]?", _normalize_text_answer(text), re.IGNORECASE)
     return match.group(1).lower() if match else None
 
 def _gold_mcqa_parts(text):
     raw = _message_to_text(text).strip()
-    match = re.match(r"\s*([A-Da-d])\s*[\).:-]?\s*(.*?)\s*$", raw)
+    match = re.match(r"\s*([A-Za-z])\s*[\).:-]?\s*(.*?)\s*$", raw)
     if not match:
         return None, _normalize_plain_text(raw)
     return match.group(1).upper(), _normalize_plain_text(match.group(2))
@@ -69,7 +69,7 @@ def _mcqa_accuracy(answer_text, gold_text):
 
     pred_raw = _message_to_text(answer_text).strip()
     pred_norm = _normalize_plain_text(pred_raw)
-    pred_letter_match = re.match(r"\s*([A-Da-d])\s*([\).:-]\s*)?(.*?)\s*$", pred_raw)
+    pred_letter_match = re.match(r"\s*([A-Za-z])\s*([\).:-]\s*)?(.*?)\s*$", pred_raw)
     pred_letter = pred_letter_match.group(1).upper() if pred_letter_match else None
     pred_tail = _normalize_plain_text(pred_letter_match.group(3)) if pred_letter_match else ""
 

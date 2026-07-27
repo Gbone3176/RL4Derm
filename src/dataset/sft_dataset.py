@@ -17,6 +17,20 @@ from src.constants import (
 )
 
 from .data_utils import get_image_info, get_video_info, llava_to_openai, pad_sequence
+from .dermmask_normalizer import is_dermmask_manifest, normalize_dermmask_payload
+try:
+    from paths import resolve_dataset_path
+except ImportError:  # pragma: no cover
+    from src.paths import resolve_dataset_path
+
+
+def _resolve_media_path(folder: str, media_path: str) -> str:
+    if os.path.isabs(media_path) or media_path.startswith(("http://", "https://", "zip://")):
+        return media_path
+    configured = resolve_dataset_path(media_path)
+    if configured.exists():
+        return str(configured)
+    return os.path.join(folder, media_path) if folder else media_path
 
 class SupervisedDataset(Dataset):
     """Dataset for supervised fine-tuning."""
@@ -34,6 +48,8 @@ class SupervisedDataset(Dataset):
             list_data_dict = json.load(open(data_path, "r"))
         else:
             list_data_dict = data_path
+        if is_dermmask_manifest(list_data_dict):
+            list_data_dict = normalize_dermmask_payload(list_data_dict)
 
         self.model_id = model_id
         self.processor = processor
@@ -81,9 +97,7 @@ class SupervisedDataset(Dataset):
             images = []
 
             for image_file in image_files:
-                if not os.path.exists(image_file):
-                    if not image_file.startswith("http"):
-                        image_file = os.path.join(image_folder, image_file)
+                image_file = _resolve_media_path(image_folder, image_file)
                 image_input = get_image_info(
                         image_file, 
                         self.image_min_pixel, 
@@ -108,9 +122,7 @@ class SupervisedDataset(Dataset):
 
             videos = []
             for video_file in video_files:
-                if not os.path.exists(video_file):
-                    if not video_file.startswith("http"):
-                        video_file = os.path.join(video_folder, video_file)
+                video_file = _resolve_media_path(video_folder, video_file)
                 video_input, video_kwargs = get_video_info(
                     video_file, 
                     self.video_min_pixel, 

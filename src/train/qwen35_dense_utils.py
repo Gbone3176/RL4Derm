@@ -11,12 +11,19 @@ from typing import Any
 from importlib import metadata
 
 
-DEFAULT_QWEN35_4B_PATH = "/mnt/nas1/disk06/bowenguo/cache/modelscope_cache/models/Qwen/Qwen3.5-4B"
-FALLBACK_QWEN35_4B_PATH = "/mnt/nas1/disk06/bowenguo/cache/modelscope_cache/models/Qwen/Qwen3___5-4B"
-DEFAULT_SFT_DATA_PATH = "/mnt/nas1/disk06/bowenguo/codes/DermoGPT/data/dermoinstruct_mcqa_train_10k.json"
-DEFAULT_DERMOINSTRUCT_ROOT = "/mnt/nas1/disk06/bowenguo/datasets/VQA/DermoInstruct"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _SWANLAB_PROJECT_ENV_BACKUP = "DERMOGPT_ORIGINAL_SWANLAB_PROJECT"
+
+try:
+    from paths import configured_dataset_path, configured_model_path, resolve_project_path
+except ImportError:  # pragma: no cover - supports src.* imports in eval scripts.
+    from src.paths import configured_dataset_path, configured_model_path, resolve_project_path
+
+
+DEFAULT_QWEN35_4B_PATH = str(configured_model_path("qwen35_4b"))
+FALLBACK_QWEN35_4B_PATH = str(configured_model_path("qwen35_4b_fallback"))
+DEFAULT_SFT_DATA_PATH = str(resolve_project_path("data/dermoinstruct_mcqa_train_10k.json"))
+DEFAULT_DERMOINSTRUCT_ROOT = str(configured_dataset_path("dermoinstruct_root"))
 
 
 class Qwen35DependencyError(RuntimeError):

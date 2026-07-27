@@ -22,6 +22,10 @@ from train.qwen35_dense_utils import (
     load_qwen35_dense_model,
     load_qwen35_processor,
 )
+try:
+    from paths import resolve_model_path, resolve_project_path
+except ImportError:  # pragma: no cover
+    from src.paths import resolve_model_path, resolve_project_path
 
 def disable_torch_init():
     """
@@ -30,9 +34,26 @@ def disable_torch_init():
     setattr(torch.nn.Linear, "reset_parameters", lambda self: None)
     setattr(torch.nn.LayerNorm, "reset_parameters", lambda self: None)
 
+def _resolve_model_or_existing(path_value):
+    if path_value is None:
+        return None
+    path_text = str(path_value)
+    path = Path(path_text).expanduser()
+    if path.is_absolute() or path.exists():
+        return str(path)
+    project_candidate = resolve_project_path(path_text)
+    if project_candidate.exists():
+        return str(project_candidate)
+    model_candidate = resolve_model_path(path_text)
+    if model_candidate.exists():
+        return str(model_candidate)
+    return path_text
+
 # This code is borrowed from LLaVA
 def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, load_4bit=False, 
                           device_map="auto", device="cuda", use_flash_attn=False, **kwargs):
+    model_path = _resolve_model_or_existing(model_path)
+    model_base = _resolve_model_or_existing(model_base)
     kwargs = {"device_map": device_map}
     
     if device != "cuda":
@@ -126,11 +147,24 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
         if model_type == "qwen3_5" or architecture == "Qwen3_5ForConditionalGeneration" or is_qwen35_dense_identifier(model_path):
             try:
                 processor = load_qwen35_processor(model_path)
-                qwen35_kwargs = dict(kwargs)
+                qwen35_kwargs, attn_diagnostics = _prepare_qwen35_from_pretrained_kwargs(kwargs)
                 if "load_in_8bit" not in qwen35_kwargs and "quantization_config" not in qwen35_kwargs:
                     qwen35_kwargs["torch_dtype"] = torch.bfloat16
                 print("Loading Qwen3.5 dense standard model...")
                 model = load_qwen35_dense_model(model_path, low_cpu_mem_usage=True, **qwen35_kwargs)
+                _require_qwen35_flash_attention(model, attn_diagnostics)
+                loader_diagnostics = _loader_diagnostics(
+                    model_path,
+                    None,
+                    processor,
+                    model,
+                    "Qwen3.5 dense standard",
+                    extra={
+                        **attn_diagnostics,
+                        "config_attn_implementation": _model_attn_implementation(model),
+                    },
+                )
+                _attach_loader_diagnostics(processor, model, loader_diagnostics)
             except Qwen35DependencyError as exc:
                 raise RuntimeError(
                     "Qwen3.5 dense checkpoint is unsupported by the current dependency set; "
@@ -152,7 +186,7 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
 
 def _load_qwen35_dense_lora_model(model_path, model_base, base_kwargs):
     print("Loading Qwen3.5 dense LoRA from base model...")
-    load_kwargs = dict(base_kwargs)
+    load_kwargs, attn_diagnostics = _prepare_qwen35_from_pretrained_kwargs(base_kwargs)
     if "load_in_8bit" not in load_kwargs and "quantization_config" not in load_kwargs:
         load_kwargs["torch_dtype"] = torch.bfloat16
 
@@ -162,6 +196,7 @@ def _load_qwen35_dense_lora_model(model_path, model_base, base_kwargs):
             del base_config.quantization_config
         processor = load_qwen35_processor(model_base)
         model = load_qwen35_dense_model(model_base, low_cpu_mem_usage=True, config=base_config, **load_kwargs)
+        _require_qwen35_flash_attention(model, attn_diagnostics)
     except Qwen35DependencyError as exc:
         raise RuntimeError(
             "Qwen3.5 dense LoRA base is unsupported by the current dependency set; "
@@ -170,11 +205,62 @@ def _load_qwen35_dense_lora_model(model_path, model_base, base_kwargs):
         ) from exc
 
     diagnostics = _loader_diagnostics(model_path, model_base, processor, model, "Qwen3.5 dense LoRA")
+    diagnostics.update(attn_diagnostics)
+    diagnostics["config_attn_implementation"] = _model_attn_implementation(model)
     diagnostics["requested_torch_dtype"] = str(load_kwargs.get("torch_dtype"))
     diagnostics["non_lora"] = _load_qwen35_non_lora_state_dict(model, model_path)
     diagnostics["loaded_non_lora"] = diagnostics["non_lora"]["loaded"]
     diagnostics["merge_lora"] = False
     return processor, model, diagnostics
+
+
+def _prepare_qwen35_from_pretrained_kwargs(base_kwargs):
+    """Convert legacy private attention kwargs to the public Transformers API for Qwen3.5.
+
+    Older repository eval wrappers set ``_attn_implementation`` before the exact model class is known.
+    Transformers 5.6.2's Qwen3.5 constructor rejects that private key, but its ``from_pretrained`` path
+    accepts the public ``attn_implementation`` argument and applies it to the config.
+    """
+    load_kwargs = dict(base_kwargs)
+    legacy_value = load_kwargs.pop("_attn_implementation", None)
+    public_value = load_kwargs.get("attn_implementation")
+    requested = public_value or legacy_value
+    if legacy_value and public_value and legacy_value != public_value:
+        raise ValueError(
+            "Conflicting Qwen3.5 attention implementations: "
+            f"_attn_implementation={legacy_value!r}, attn_implementation={public_value!r}"
+        )
+    if legacy_value and not public_value:
+        load_kwargs["attn_implementation"] = legacy_value
+
+    diagnostics = {
+        "requested_attn_implementation": requested,
+        "from_pretrained_attn_key": "attn_implementation" if requested else None,
+        "had_internal_attn_key": legacy_value is not None,
+        "forbidden_internal_attn_key_present": "_attn_implementation" in load_kwargs,
+    }
+    if diagnostics["forbidden_internal_attn_key_present"]:
+        raise ValueError("Qwen3.5 dense loader must not pass _attn_implementation to from_pretrained.")
+    return load_kwargs, diagnostics
+
+
+def _model_attn_implementation(model):
+    config = getattr(model, "config", None)
+    if config is None:
+        return None
+    return getattr(config, "_attn_implementation", None) or getattr(config, "attn_implementation", None)
+
+
+def _require_qwen35_flash_attention(model, attn_diagnostics):
+    requested = attn_diagnostics.get("requested_attn_implementation")
+    if requested != "flash_attention_2":
+        return
+    actual = _model_attn_implementation(model)
+    if actual != "flash_attention_2":
+        raise RuntimeError(
+            "Qwen3.5 dense loader requested Flash Attention 2 but the loaded config did not keep it; "
+            f"requested={requested!r}, actual={actual!r}. Refusing SDPA/eager fallback."
+        )
 
 
 def _normalize_non_lora_state_dict(state_dict, *, strip_peft_base_layer):
