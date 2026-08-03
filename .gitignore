@@ -52,6 +52,9 @@ condaenv.*.requirements.txt
 ###############################################################################
 # Editor, OS, and local agent runtime state
 ###############################################################################
+# Dot-prefixed directories are local-only by default.
+**/.*/
+
 .DS_Store
 Thumbs.db
 .idea/
