@@ -85,7 +85,18 @@ HARNESS.md
 # Experiment outputs and trackers
 ###############################################################################
 /experiment/
-/experiments/
+
+# Sync only the three canonical Markdown registries from the experiments tree;
+# experiment directories and every other file remain local-only.
+/experiments/**
+!/experiments/
+!/experiments/EXP_SUM.md
+!/experiments/IDEAS.md
+!/experiments/TEST_SUM.md
+
+# Migration bookkeeping stays local and must not be synchronized.
+/experiments/STRUCTURE_MIGRATION_20260803.md
+/experiments/STRUCTURE_MIGRATION_20260803.tsv
 
 output/
 outputs/
